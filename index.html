@@ -219,6 +219,7 @@ priceOutput.textContent = formatter.format(data[coinId][currency]);
     });
 
     function calculate() {
+      const currency = document.getElementById('currencySelect').value;
       const buy = parseFloat(document.getElementById('buyPrice').value);
       const maker = parseFloat(document.getElementById('makerFee').value) / 100;
       const taker = parseFloat(document.getElementById('takerFee').value) / 100;
