@@ -1,12 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Crypto Toolkit V0.06</title>
+  <title>Crypto Toolkit V0.07 (No Chart)</title>
   <meta name="theme-color" content="#0b3d91" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -104,8 +102,6 @@
 
     <div class="result" id="marketResult"></div>
     <div class="result" id="limitResult"></div>
-
-    <canvas id="priceChart" height="300"></canvas>
   </section>
 
   <section id="port" class="page">
@@ -185,44 +181,21 @@
     takerInput.addEventListener("input", calculate);
     profitInput.addEventListener("input", calculate);
 
-    let chart;
-    async function updateChart() {
+    async function updatePrice() {
       const coin = coinSelect.value;
       const currency = currencySelect.value;
-
       try {
         const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coin}&vs_currencies=${currency}`);
         const data = await res.json();
         priceOutput.textContent = `${currency.toUpperCase()} ${data[coin][currency]}`;
-
-        const resChart = await fetch(`https://api.coingecko.com/api/v3/coins/${coin}/market_chart?vs_currency=${currency}&days=30`);
-        const chartData = await resChart.json();
-        const reduced = chartData.prices.filter((_, i, arr) => i % Math.ceil(arr.length / 60) === 0);
-        const labels = reduced.map(p => new Date(p[0]).toLocaleDateString());
-        const prices = reduced.map(p => p[1]);
-
-        if (chart) chart.destroy();
-        const ctx = document.getElementById("priceChart").getContext("2d");
-        chart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels,
-            datasets: [{
-              label: coin.toUpperCase(),
-              data: prices,
-              borderColor: "#4bc0c0",
-              fill: false,
-            }]
-          }
-        });
       } catch (e) {
         priceOutput.textContent = "Error loading price";
       }
     }
 
-    coinSelect.addEventListener("change", updateChart);
-    currencySelect.addEventListener("change", updateChart);
-    window.addEventListener("load", updateChart);
+    coinSelect.addEventListener("change", updatePrice);
+    currencySelect.addEventListener("change", updatePrice);
+    window.addEventListener("load", updatePrice);
   </script>
 </body>
 </html>
