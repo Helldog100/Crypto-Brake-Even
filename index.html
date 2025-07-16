@@ -1,16 +1,16 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Crypto Break-Even with Charts</title>
-  <meta name="theme-color" content="#0b3d91" />
+  <title>Crypto Break-Even Calculator</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
-      background-color: #f4f7f9;
+      background: #f4f7f9;
       max-width: 480px;
       margin: auto;
       transition: background-color 0.3s, color 0.3s;
@@ -44,6 +44,7 @@
     }
     .chart-container {
       margin-top: 20px;
+      height: 350px;
     }
     .toggle-container {
       text-align: center;
@@ -67,51 +68,50 @@
 <body>
   <h2>Crypto Break-Even Calculator</h2>
 
+  <label for="currencySelect">Currency:</label>
+  <select id="currencySelect">
+    <option value="usd">USD</option>
+    <option value="gbp">GBP</option>
+    <option value="eur">EUR</option>
+    <option value="jpy">JPY</option>
+    <option value="aud">AUD</option>
+  </select><br><br>
+
   <label for="coinSelect">Select Coin:</label>
-<select id="currencySelect">
-  <option value="usd">USD</option>
-  <option value="gbp">GBP</option>
-  <option value="eur">EUR</option>
-  <option value="jpy">JPY</option>
-  <option value="aud">AUD</option>
-</select>
-<br><br>
   <select id="coinSelect">
     <option value="bitcoin">Bitcoin (BTC)</option>
     <option value="ripple">Ripple (XRP)</option>
     <option value="dogecoin">Dogecoin (DOGE)</option>
-    <option value="ethereum">Ethereum (ETH)</option>
-    <option value="solana">Solana (SOL)</option>
-    <option value="cardano">Cardano (ADA)</option>
-    <option value="polygon">Polygon (MATIC)</option>
-    <option value="litecoin">Litecoin (LTC)</option>
-    <option value="chainlink">Chainlink (LINK)</option>
     <option value="pepe">Pepe (PEPE)</option>
   </select>
 
   <div class="result">Current Price: <span id="priceOutput">Loading…</span></div>
 
   <label for="exchangeSelect">Select Platform:</label>
-<select id="exchangeSelect">
-  <option value="">Custom / Manual</option>
-  <option value="crypto">Crypto.com</option>
-  <option value="kraken">Kraken Pro</option>
-  <option value="binance">Binance</option>
-  <option value="coinbase">Coinbase Pro</option>
-  <option value="kucoin">KuCoin</option>
-</select>
+  <select id="exchangeSelect">
+    <option value="">Custom / Manual</option>
+    <option value="crypto">Crypto.com</option>
+    <option value="kraken">Kraken Pro</option>
+    <option value="binance">Binance</option>
+    <option value="coinbase">Coinbase Pro</option>
+    <option value="kucoin">KuCoin</option>
+    <option value="nexo">Nexo</option>
+  </select>
 
-<label>Buy Price ($)</label>
-  <input type="number" id="buyPrice" step="0.0001" placeholder="e.g. 2.90">
+  <label>Buy Price</label>
+  <input type="number" id="buyPrice" step="any" oninput="calculate()">
 
   <label>Maker Fee (%)</label>
-  <input type="number" id="makerFee" step="0.001" value="0.25">
+  <input type="number" id="makerFee" step="any" value="0.25" oninput="calculate()">
 
   <label>Taker Fee (%)</label>
-  <input type="number" id="takerFee" step="0.001" value="0.50">
+  <input type="number" id="takerFee" step="any" value="0.50" oninput="calculate()">
 
   <label>Desired Profit (%)</label>
-  <input type="number" id="profitTarget" step="0.001" value="0">
+  <input type="number" id="profitTarget" step="any" value="0" oninput="calculate()">
+
+  <label>Coin Quantity</label>
+  <input type="number" id="coinQty" step="any" value="1" oninput="calculate()">
 
   <div class="toggle-container">
     <label><input type="checkbox" id="darkModeToggle" /> Enable Dark Mode</label>
@@ -119,6 +119,7 @@
 
   <div class="result" id="marketResult"></div>
   <div class="result" id="limitResult"></div>
+  <div class="result" id="totalProfit"></div>
 
   <div class="range-buttons">
     <button data-range="1">1D</button>
@@ -127,138 +128,144 @@
   </div>
 
   <div class="chart-container">
-    <canvas id="priceChart"></canvas>
+    <canvas id="priceChart" style="width: 100%; height: 100%;"></canvas>
   </div>
 
-  <script>
-    const coinSelect = document.getElementById('coinSelect');
-    const priceOutput = document.getElementById('priceOutput');
-    const marketResult = document.getElementById('marketResult');
-    const limitResult = document.getElementById('limitResult');
-    const darkToggle = document.getElementById('darkModeToggle');
-    const chartRangeButtons = document.querySelectorAll('.range-buttons button');
+<script>
+const coinSelect = document.getElementById('coinSelect');
+const priceOutput = document.getElementById('priceOutput');
+const marketResult = document.getElementById('marketResult');
+const limitResult = document.getElementById('limitResult');
+const exchangeFees = {
+  crypto: { maker: 0.25, taker: 0.50 },
+  kraken: { maker: 0.16, taker: 0.26 },
+  binance: { maker: 0.10, taker: 0.10 },
+  coinbase: { maker: 0.40, taker: 0.60 },
+  kucoin: { maker: 0.10, taker: 0.10 },
+  nexo: { maker: 0.00, taker: 0.50 }
+};
 
-    let chartRange = localStorage.getItem('chartRange') || '30';
+document.getElementById('exchangeSelect').addEventListener('change', e => {
+  const selected = exchangeFees[e.target.value];
+  if (selected) {
+    document.getElementById('makerFee').value = selected.maker;
+    document.getElementById('takerFee').value = selected.taker;
+    calculate();
+  }
+});
 
-    chartRangeButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        chartRange = btn.dataset.range;
-        localStorage.setItem('chartRange', chartRange);
-        updateCoin();
-      });
-    });
+function calculate() {
+  const currency = document.getElementById('currencySelect').value;
+  const buy = parseFloat(document.getElementById('buyPrice').value);
+  const maker = parseFloat(document.getElementById('makerFee').value) / 100;
+  const taker = parseFloat(document.getElementById('takerFee').value) / 100;
+  const profit = parseFloat(document.getElementById('profitTarget').value) / 100;
+  const qty = parseFloat(document.getElementById("coinQty").value);
 
-    function setDarkMode(enabled) {
-      document.body.classList.toggle('dark', enabled);
-      darkToggle.checked = enabled;
-      localStorage.setItem('darkMode', enabled ? '1' : '0');
-    }
+  if (isNaN(buy) || isNaN(qty)) return;
 
-    darkToggle.addEventListener('change', () => {
-      setDarkMode(darkToggle.checked);
-    });
+  const marketSell = buy * (1 + maker) * (1 + taker);
+  const limitSell = buy * (1 + profit) * (1 + taker);
+  const formatter = new Intl.NumberFormat(undefined, { style: "currency", currency: currency.toUpperCase() });
 
-    function savePreferences() {
-      localStorage.setItem('selectedCoin', coinSelect.value);
-    }
+  marketResult.textContent = 'Market Sell Price: ' + formatter.format(marketSell);
+  limitResult.textContent = 'Limit Sell Price: ' + formatter.format(limitSell);
+  const profitTotal = (limitSell - buy) * qty;
+  document.getElementById('totalProfit').textContent = 'Total Profit: ' + formatter.format(profitTotal);
+}
 
-    async function fetchPrice(coinId) {
-      const currency = document.getElementById('currencySelect').value;
+const chartRangeButtons = document.querySelectorAll('.range-buttons button');
+let chartRange = localStorage.getItem('chartRange') || '30';
+chartRangeButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    chartRange = btn.dataset.range;
+    localStorage.setItem('chartRange', chartRange);
+    updateCoin();
+  });
+});
 
-      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=${currency}`);
-      const data = await res.json();
-      const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() });
-priceOutput.textContent = formatter.format(data[coinId][currency]);
-    }
+function setDarkMode(enabled) {
+  document.body.classList.toggle('dark', enabled);
+  document.getElementById('darkModeToggle').checked = enabled;
+  localStorage.setItem('darkMode', enabled ? '1' : '0');
+}
 
-    async function plotChart(coinId) {
-      const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${chartRange}`);
-      const data = await res.json();
-      const labels = data.prices.map(p => new Date(p[0]).toLocaleDateString());
-      const prices = data.prices.map(p => p[1]);
+document.getElementById('darkModeToggle').addEventListener('change', () => {
+  setDarkMode(document.getElementById('darkModeToggle').checked);
+});
 
-      if (window.chartInstance) window.chartInstance.destroy();
-      const ctx = document.getElementById('priceChart').getContext('2d');
-      window.chartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: coinId.toUpperCase() + ` - ${chartRange} Day Price`,
-            data: prices,
-            borderColor: '#4bc0c0',
-            fill: false,
-          }]
+async function fetchPrice(coinId) {
+  const currency = document.getElementById('currencySelect').value;
+  const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=${currency}`);
+  const data = await res.json();
+  const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() });
+  priceOutput.textContent = formatter.format(data[coinId][currency]);
+}
+
+async function plotChart(coinId) {
+  const currency = document.getElementById('currencySelect').value;
+  const res = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=${currency}&days=${chartRange}`);
+  const data = await res.json();
+  const raw = data.prices;
+  const interval = Math.max(1, Math.floor(raw.length / (chartRange === '1' ? 24 : chartRange === '30' ? 30 : 45)));
+  const downsampled = raw.filter((_, i) => i % interval === 0);
+  const labels = downsampled.map(p => new Date(p[0]).toLocaleDateString());
+  const prices = downsampled.map(p => p[1]);
+  const formatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() });
+
+  if (window.chartInstance) window.chartInstance.destroy();
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  window.chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: coinId.toUpperCase(),
+        data: prices,
+        borderColor: '#4bc0c0',
+        tension: 0.3,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => formatter.format(ctx.raw)
+          }
         }
-      });
-    }
-
-    async function updateCoin() {
-      const coinId = coinSelect.value;
-      savePreferences();
-      await fetchPrice(coinId);
-      await plotChart(coinId);
-    }
-
-    
-    const exchangeFees = {
-      crypto: { maker: 0.25, taker: 0.50 },
-      kraken: { maker: 0.16, taker: 0.26 },
-      binance: { maker: 0.10, taker: 0.10 },
-      coinbase: { maker: 0.40, taker: 0.60 },
-      kucoin: { maker: 0.10, taker: 0.10 }
-    };
-
-    document.getElementById('exchangeSelect').addEventListener('change', e => {
-      const selected = exchangeFees[e.target.value];
-      if (selected) {
-        document.getElementById('makerFee').value = selected.maker;
-        document.getElementById('takerFee').value = selected.taker;
-        calculate();
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: val => formatter.format(val)
+          }
+        }
       }
-    });
-
-    function calculate() {
-      const currency = document.getElementById('currencySelect').value;
-      const buy = parseFloat(document.getElementById('buyPrice').value);
-      const maker = parseFloat(document.getElementById('makerFee').value) / 100;
-      const taker = parseFloat(document.getElementById('takerFee').value) / 100;
-      const profit = parseFloat(document.getElementById('profitTarget').value) / 100;
-
-      if (isNaN(buy) || buy <= 0) {
-        marketResult.textContent = '';
-        limitResult.textContent = '';
-        return;
-      }
-
-      const marketSell = ((buy * (1 + taker) * (1 + profit)) / (1 - taker)).toFixed(5);
-      const limitSell = ((buy * (1 + maker) * (1 + profit)) / (1 - maker)).toFixed(5);
-
-      marketResult.textContent = 'Market Sell Price: ' + new Intl.NumberFormat(undefined, { style: "currency", currency: currency.toUpperCase() }).format(marketSell);
-      limitResult.textContent = 'Limit Sell Price: ' + new Intl.NumberFormat(undefined, { style: "currency", currency: currency.toUpperCase() }).format(limitSell);
     }
+  });
+}
 
-    document.getElementById('buyPrice').addEventListener('input', calculate);
-    document.getElementById('makerFee').addEventListener('input', calculate);
-    document.getElementById('takerFee').addEventListener('input', calculate);
-    document.getElementById('profitTarget').addEventListener('input', calculate);
-    coinSelect.addEventListener('change', updateCoin);
+async function updateCoin() {
+  const coinId = coinSelect.value;
+  await fetchPrice(coinId);
+  await plotChart(coinId);
+}
 
-    // Load preferences
-    window.addEventListener('load', () => {
+window.addEventListener('load', () => {
+  const savedCurrency = localStorage.getItem('currency') || 'usd';
+  document.getElementById('currencySelect').value = savedCurrency;
+  document.getElementById('currencySelect').addEventListener('change', () => {
+    localStorage.setItem('currency', document.getElementById('currencySelect').value);
+    updateCoin();
+  });
 
-    const currencySelect = document.getElementById('currencySelect');
-    currencySelect.value = localStorage.getItem('currency') || 'usd';
-    currencySelect.addEventListener('change', () => {
-      localStorage.setItem('currency', currencySelect.value);
-      updateCoin();
-    });
-
-      if (localStorage.getItem('darkMode') === '1') setDarkMode(true);
-      const savedCoin = localStorage.getItem('selectedCoin');
-      if (savedCoin) coinSelect.value = savedCoin;
-      updateCoin();
-    });
-  </script>
+  if (localStorage.getItem('darkMode') === '1') setDarkMode(true);
+  updateCoin();
+});
+</script>
 </body>
 </html>
